@@ -13,7 +13,7 @@ split — cheaper to run as a single Railway service.
    community MySQL-compatible template).
 2. **Redis** — add from Railway's template gallery.
 3. **This app** — "New Web Service" → connect this GitHub repo. Railway will
-   detect `railway.json` and build `Containerfile` automatically.
+   detect `railway.json` and build `Dockerfile` automatically.
 
 ## Required environment variables on the app service
 
@@ -31,7 +31,7 @@ Set these under the app service's **Variables** tab. Railway reference syntax
 | `REDISPORT` | `${{Redis.REDISPORT}}` |
 | `REDIS_URL` | `${{Redis.REDIS_URL}}` |
 | `ADMIN_PASSWORD` | pick a real password — used once, on first boot, to set the site's Administrator password |
-| `SITE_NAME` | optional, defaults to `erp.production` — doesn't need to match your real domain, `serve_default_site` handles routing |
+| `SITE_NAME` | **required** — must exactly match the public domain this app is served at (generate the domain in Networking first, see below) |
 
 (Adjust the service names in `${{...}}` to whatever you actually name the
 MariaDB/Redis services in your Railway project — Railway autocompletes these
@@ -101,5 +101,5 @@ supervisorctl -c /etc/supervisor/conf.d/supervisord.conf status
 ## Local test build
 
 ```bash
-docker build -f Containerfile -t lsps-erp:test .
+docker build -f Dockerfile -t lsps-erp:test .
 ```
