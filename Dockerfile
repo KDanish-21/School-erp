@@ -1,15 +1,18 @@
-# Little Scholars Public School — single-container Frappe/ERPNext/Education image for Railway.
+# Little Scholars Public School — fully self-contained single-container image
+# for Railway: Frappe + ERPNext + Education + MariaDB + Redis all in one.
 #
 # Adapted from the official frappe_docker "custom" image
-# (https://github.com/frappe/frappe_docker, MIT licensed). Two deliberate
+# (https://github.com/frappe/frappe_docker, MIT licensed). Deliberate
 # differences from the upstream pattern:
 #   1. apps.json is COPYed directly instead of passed as a BuildKit --secret —
 #      our apps (frappe/erpnext/education) are all public repos, so there is
 #      nothing in apps.json worth keeping out of image history.
-#   2. The final stage adds supervisord and runs nginx + gunicorn + socketio +
-#      worker + scheduler together in ONE container/process group, instead of
-#      frappe_docker's normal one-container-per-process split — cheaper to run
-#      as a single Railway service.
+#   2. MariaDB and Redis are installed IN this image and run locally
+#      (127.0.0.1) under supervisord, instead of being separate Railway
+#      services — this is a single-service deployment: no cross-service
+#      variable wiring, just SITE_NAME + ADMIN_PASSWORD and two volumes.
+#   3. supervisord runs nginx + gunicorn + socketio + worker + scheduler +
+#      mariadb + redis together in ONE container/process group.
 
 ARG PYTHON_VERSION=3.14
 ARG DEBIAN_BASE=bookworm
@@ -29,7 +32,7 @@ RUN useradd -ms /bin/bash frappe \
     curl git vim nginx gettext-base file supervisor \
     libpango-1.0-0 libharfbuzz0b libpangoft2-1.0-0 libpangocairo-1.0-0 \
     restic gpg \
-    mariadb-client less \
+    mariadb-server mariadb-client redis-server less \
     wait-for-it jq media-types \
     && mkdir -p ${NVM_DIR} \
     && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.6/install.sh | bash \
@@ -50,11 +53,19 @@ RUN useradd -ms /bin/bash frappe \
         DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y chromium-headless-shell; \
     fi \
     && rm -rf /var/lib/apt/lists/* \
+    # Debian's mariadb-server postinst auto-runs its own mariadb-install-db
+    # during `apt-get install`, baking a pre-initialized /var/lib/mysql (with
+    # Debian's own unix_socket-only root setup) into this image layer. A
+    # brand-new Docker/Railway Volume mounted over that path gets seeded from
+    # the image's existing content on first use, which silently skips our own
+    # start-mariadb.sh first-boot bootstrap entirely (it only initializes when
+    # the directory is empty). Wipe it here so the image's own copy is empty,
+    # guaranteeing our script's first-boot logic is what actually runs.
+    && rm -rf /var/lib/mysql/* \
     && rm -fr /etc/nginx/sites-enabled/default \
     && mkdir -p /etc/nginx/snippets \
     && pip3 install frappe-bench \
     && sed -i '/user www-data/d' /etc/nginx/nginx.conf \
-    && ln -sf /dev/stdout /var/log/nginx/access.log && ln -sf /dev/stderr /var/log/nginx/error.log \
     && touch /run/nginx.pid \
     && chown -R frappe:frappe /etc/nginx/conf.d /etc/nginx/nginx.conf /etc/nginx/snippets \
     && chown -R frappe:frappe /var/log/nginx /var/lib/nginx /run/nginx.pid
@@ -106,21 +117,25 @@ RUN cp -r /home/frappe/frappe-bench/sites/assets /home/frappe/frappe-bench/asset
   rm -rf /home/frappe/frappe-bench/sites/assets
 
 # No Dockerfile VOLUME instruction here — Railway's builder rejects it
-# ("use Railway Volumes" instead). Attach a Railway Volume at
-# /home/frappe/frappe-bench/sites in the service's Settings → Volumes;
-# the container works the same either way, this only affects `docker run`
-# defaults for local testing.
+# ("use Railway Volumes" instead). Attach Railway Volumes at
+# /home/frappe/frappe-bench/sites AND /var/lib/mysql in the service's
+# Settings → Volumes; the container works the same either way, this only
+# affects `docker run` defaults for local testing.
 
 USER root
 COPY resources/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-COPY resources/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod 755 /usr/local/bin/docker-entrypoint.sh \
-  && mkdir -p /home/frappe/frappe-bench/config/pids \
+COPY resources/fix-permissions.sh /usr/local/bin/fix-permissions.sh
+COPY resources/start-mariadb.sh /usr/local/bin/start-mariadb.sh
+COPY resources/bootstrap.sh /usr/local/bin/bootstrap.sh
+RUN chmod 755 /usr/local/bin/fix-permissions.sh /usr/local/bin/start-mariadb.sh /usr/local/bin/bootstrap.sh \
+  && mkdir -p /home/frappe/frappe-bench/config/pids /var/lib/mysql /var/run/mysqld \
   && chown -R frappe:frappe /home/frappe/frappe-bench/config
 
 ENV GUNICORN_THREADS=2
 ENV GUNICORN_WORKERS=1
 ENV GUNICORN_TIMEOUT=120
 
-USER frappe
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+# Stays root: supervisord itself runs as root (needed to fix up freshly-
+# mounted Railway Volumes' ownership at startup), then drops each individual
+# program to the non-root `frappe` user via supervisord.conf's `user=` directive.
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

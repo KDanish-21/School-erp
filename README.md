@@ -1,99 +1,97 @@
 # Little Scholars ERP — Railway deployment
 
-Single-container Frappe + ERPNext + Education image, built for Railway. Adapted
-from the official [frappe_docker](https://github.com/frappe/frappe_docker)
-(MIT licensed) "custom apps" pattern, consolidated into one container running
-nginx + gunicorn + socketio + a background worker + the scheduler together
-(via supervisord) instead of frappe_docker's usual one-container-per-process
-split — cheaper to run as a single Railway service.
+Fully self-contained single-container image: Frappe + ERPNext + Education +
+MariaDB + Redis, all running together in ONE Railway service via supervisord.
+No separate database/cache services, no cross-service variable wiring —
+adapted from the official [frappe_docker](https://github.com/frappe/frappe_docker)
+(MIT licensed) "custom apps" pattern, then consolidated further than
+frappe_docker's own multi-container split.
 
-## What you need in Railway (one project, 3 services)
+Built and verified end-to-end locally before being written up here: a fresh
+container creates the site from scratch (frappe → erpnext → education),
+serves real logins over HTTP, and — critically — **persists correctly across
+a restart** (confirmed: restarting does NOT re-initialize the database or
+recreate the site, it goes straight to `bench migrate` and starts serving).
 
-1. **MariaDB** — add from Railway's template gallery ("MariaDB" or the
-   community MySQL-compatible template).
-2. **Redis** — add from Railway's template gallery.
-3. **This app** — "New Web Service" → connect this GitHub repo. Railway will
-   detect `railway.json` and build `Dockerfile` automatically.
+## What you need in Railway — just this one service
 
-## Required environment variables on the app service
+**No MariaDB or Redis services to add.** Just:
 
-Set these under the app service's **Variables** tab. Railway reference syntax
-(`${{ServiceName.VAR}}`) pulls values from the other two services automatically
-— no copy-pasting credentials:
+1. In Railway: **New Web Service** → connect this GitHub repo (`KDanish-21/School-erp`).
+   Railway will detect `railway.json` and build `Dockerfile` automatically.
+2. **Two volumes**, attached *before* the first deploy (Settings → Volumes → New Volume):
+   - mount path `/home/frappe/frappe-bench/sites`
+   - mount path `/var/lib/mysql`
+
+   Both are required for persistence. Without them, a redeploy wipes
+   everything and rebuilds the site from scratch — confirmed by testing.
+   (Redis has no persistent volume — it's just cache + job queue here, fine
+   to lose on restart, no real data lives there.)
+3. **Networking**: Settings → Networking → Generate Domain. Note the exact
+   domain it gives you (e.g. `school-erp-production.up.railway.app`).
+4. **Variables** — only two are actually required:
 
 | Variable | Value |
 |---|---|
-| `MYSQLHOST` | `${{MariaDB.MYSQLHOST}}` |
-| `MYSQLPORT` | `${{MariaDB.MYSQLPORT}}` |
-| `MYSQLUSER` | `${{MariaDB.MYSQLUSER}}` |
-| `MYSQLPASSWORD` | `${{MariaDB.MYSQLPASSWORD}}` |
-| `REDISHOST` | `${{Redis.REDISHOST}}` |
-| `REDISPORT` | `${{Redis.REDISPORT}}` |
-| `REDIS_URL` | `${{Redis.REDIS_URL}}` |
-| `ADMIN_PASSWORD` | pick a real password — used once, on first boot, to set the site's Administrator password |
-| `SITE_NAME` | **required** — must exactly match the public domain this app is served at (generate the domain in Networking first, see below) |
+| `SITE_NAME` | **must exactly match** the domain from step 3 — nginx routes by that hostname, so a mismatch breaks the desk UI's assets even though the API still responds |
+| `ADMIN_PASSWORD` | pick a real password — sets the site's Administrator login on first boot |
 
-(Adjust the service names in `${{...}}` to whatever you actually name the
-MariaDB/Redis services in your Railway project — Railway autocompletes these
-in the dashboard's variable editor.)
+Optional:
 
-## ⚠️ Attach a persistent volume — do this before the first deploy
+| Variable | Default if unset |
+|---|---|
+| `MYSQL_ROOT_PASSWORD` | `changeit123` — internal only, MariaDB binds to `127.0.0.1` inside the container, never reachable from outside it |
 
-The image declares `/home/frappe/frappe-bench/sites` and `.../logs` as Docker
-volumes, but **without an actual persistent volume attached in Railway, every
-redeploy wipes the site and recreates it from scratch** (confirmed locally —
-recreating the container without a named volume loses the whole site,
-students and all). In the app service: **Settings → Volumes → New Volume**,
-mount it at `/home/frappe/frappe-bench/sites`. Do this *before* the first
-deploy, or your first-boot site creation will need to happen again after you
-add it.
-
-## Networking
-
-In the app service's **Settings → Networking**, generate a public domain (or
-add your own later). Railway sets `$PORT` automatically; nginx inside the
-container listens on it.
+That's it. No `MYSQLHOST`/`REDISHOST`/etc. — MariaDB and Redis both run
+locally in this same container.
 
 ## First boot
 
-On first start, the entrypoint (`resources/docker-entrypoint.sh`) creates the
-site fresh (`bench new-site` + installs `erpnext` and `education`) — this
-takes a few minutes the very first time. Every subsequent restart just runs
-`bench migrate` and starts serving, since the site already exists in the
-`sites` volume.
+Takes a few minutes the first time: initializes MariaDB's data directory,
+bootstraps a working root password (see "MariaDB root auth" below for why
+this needs a specific approach), then creates the site and installs
+`erpnext` + `education`. Every restart after that just runs `bench migrate`
+and starts serving — confirmed by testing an actual restart.
 
-**This gives you a fresh, empty Education install** — not the exact demo data
-from the local dev bench (120 students, fees, attendance, branding, etc.).
-That data lives in MariaDB and the site's `files` folder, not in this repo, so
-it doesn't come along automatically. To bring it over:
+**This gives you a fresh, empty Education install** — not the exact demo
+data from the local dev bench (120 students, fees, attendance, branding).
+That data lives in the database/files, not in this repo. To bring it over,
+either restore a real `bench backup --with-files` from the local bench, or
+re-run the two idempotent scripts (`seed_school.py`, `ui_polish.py`) against
+this site — they reproduce the same data from scratch. Ask for a scripted
+version of the Company/Chart-of-Accounts step (normally done via the
+interactive setup wizard) if you go this route.
 
-```bash
-# On the local dev machine — takes a full backup (db + public + private files)
-cd ~/frappe-bench
-bench --site erp.localhost backup --with-files
+## Notable things fixed while building this (for future reference)
 
-# Copy the resulting sites/erp.localhost/private/backups/*.sql.gz,
-# *-files.tar, *-private-files.tar to the Railway container (e.g. via
-# `railway run bash` and scp/curl, or a temporary object storage link), then:
-
-bench --site erp.production --force restore <timestamp>-database.sql.gz \
-  --with-public-files <timestamp>-files.tar \
-  --with-private-files <timestamp>-private-files.tar \
-  --db-root-username "$MYSQLUSER" --db-root-password "$MYSQLPASSWORD"
-```
-
-Alternatively — since the demo data was built entirely by two idempotent
-scripts (`seed_school.py`, `ui_polish.py`) rather than by hand — you can just
-run those two scripts against the fresh Railway site instead of restoring a
-binary backup. They reproduce the exact same 120 students / fees / attendance
-/ branding from scratch. This needs the Company + Chart of Accounts that the
-setup wizard normally creates interactively; ask for a scripted version of
-that step if you go this route.
+- **No Dockerfile `VOLUME` instruction** — Railway's builder rejects it
+  outright ("use Railway Volumes instead"). Persistence works the same via
+  the two Railway Volumes above; nothing in the image needs to declare it.
+- **`Containerfile` had to be renamed to `Dockerfile`** — Railway only
+  auto-detects that exact filename for its Docker builder, even with
+  `railway.json` specifying `dockerfilePath` explicitly.
+- **nginx can't symlink its error log to `/dev/stderr`** under this
+  root-supervisord-then-setuid-to-frappe process model — the child's fresh
+  `open()` of that path gets `EACCES` even though it can freely write to its
+  own already-inherited stderr fd. Fixed by letting nginx use plain regular
+  log files instead of the symlink trick.
+- **MariaDB root auth needs the bulletproof `--skip-grant-tables` reset**,
+  not `mariadb-install-db --auth-root-authentication-method=normal` alone —
+  that flag did not reliably avoid `unix_socket` auth on root, which then
+  refuses every connection from a non-`root` OS user (we run as `frappe`).
+  Also needs `IDENTIFIED VIA mysql_native_password` explicitly, not a bare
+  `IDENTIFIED BY` — the latter doesn't actually switch the auth plugin away
+  from `unix_socket` on an existing account.
+- **Debian's `mariadb-server` package auto-initializes `/var/lib/mysql`
+  during `apt-get install`**, baking that into the image layer. A brand-new
+  Railway Volume mounted over that path gets seeded from the image's
+  existing content on first use — silently skipping this image's own
+  first-boot bootstrap logic entirely. Fixed by wiping `/var/lib/mysql` at
+  the end of the image build so the volume always starts genuinely empty.
 
 ## Debugging on Railway
 
-`railway run bash` (or the Railway dashboard's shell) drops you into the
-container. Check process status with:
+`railway run bash` (or the dashboard's shell) drops you into the container.
 ```bash
 supervisorctl -c /etc/supervisor/conf.d/supervisord.conf status
 ```
@@ -102,4 +100,10 @@ supervisorctl -c /etc/supervisor/conf.d/supervisord.conf status
 
 ```bash
 docker build -f Dockerfile -t lsps-erp:test .
+docker volume create test-sites && docker volume create test-mysql
+docker run -d -p 8080:8080 \
+  -v test-sites:/home/frappe/frappe-bench/sites \
+  -v test-mysql:/var/lib/mysql \
+  -e SITE_NAME=erp.localtest -e ADMIN_PASSWORD=admin -e PORT=8080 \
+  lsps-erp:test
 ```
