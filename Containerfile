@@ -105,7 +105,11 @@ WORKDIR /home/frappe/frappe-bench
 RUN cp -r /home/frappe/frappe-bench/sites/assets /home/frappe/frappe-bench/assets && \
   rm -rf /home/frappe/frappe-bench/sites/assets
 
-VOLUME ["/home/frappe/frappe-bench/sites", "/home/frappe/frappe-bench/logs"]
+# No Dockerfile VOLUME instruction here — Railway's builder rejects it
+# ("use Railway Volumes" instead). Attach a Railway Volume at
+# /home/frappe/frappe-bench/sites in the service's Settings → Volumes;
+# the container works the same either way, this only affects `docker run`
+# defaults for local testing.
 
 USER root
 COPY resources/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
