@@ -43,6 +43,11 @@ else
   bench --site "$SITE_NAME" migrate
 fi
 
+echo "==> Ensuring setup-wizard completion flags (idempotent, runs every boot)"
+export SITE_NAME
+export SITES_PATH="$BENCH_DIR/sites"
+(cd "$SITES_PATH" && "$BENCH_DIR/env/bin/python" /home/frappe/fix_setup_wizard_flags.py)
+
 SEED_MARKER="sites/$SITE_NAME/.demo_seeded"
 if [ ! -f "$SEED_MARKER" ]; then
   echo "==> Seeding demo data + branding (first time only for this site)"
