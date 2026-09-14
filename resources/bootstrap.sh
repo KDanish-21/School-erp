@@ -43,4 +43,20 @@ else
   bench --site "$SITE_NAME" migrate
 fi
 
+SEED_MARKER="sites/$SITE_NAME/.demo_seeded"
+if [ ! -f "$SEED_MARKER" ]; then
+  echo "==> Seeding demo data + branding (first time only for this site)"
+  export SITE_NAME
+  export SITES_PATH="$BENCH_DIR/sites"
+  # Both scripts do a raw frappe.init() (not via the `bench` CLI wrapper),
+  # which needs cwd = sites/ for frappe's own logger to resolve its
+  # "../logs" path correctly — confirmed the hard way earlier in this project.
+  (cd "$SITES_PATH" && "$BENCH_DIR/env/bin/python" /home/frappe/seed_school.py)
+  (cd "$SITES_PATH" && "$BENCH_DIR/env/bin/python" /home/frappe/ui_polish.py)
+  touch "$SEED_MARKER"
+  echo "==> Demo data + branding seeded"
+else
+  echo "==> Demo data already seeded — skipping"
+fi
+
 echo "==> Bootstrap complete"

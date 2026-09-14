@@ -33,7 +33,7 @@ RUN useradd -ms /bin/bash frappe \
     libpango-1.0-0 libharfbuzz0b libpangoft2-1.0-0 libpangocairo-1.0-0 \
     restic gpg \
     mariadb-server mariadb-client redis-server less \
-    wait-for-it jq media-types \
+    wait-for-it jq media-types fonts-dejavu-core \
     && mkdir -p ${NVM_DIR} \
     && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.6/install.sh | bash \
     && . ${NVM_DIR}/nvm.sh \
@@ -103,7 +103,11 @@ RUN bench init \
   /home/frappe/frappe-bench && \
   cd /home/frappe/frappe-bench && \
   echo "{}" > sites/common_site_config.json && \
-  find apps -mindepth 1 -path "*/.git" | xargs rm -fr
+  find apps -mindepth 1 -path "*/.git" | xargs rm -fr && \
+  # Faker + Pillow: used by the demo-data seed script (seed_school.py) and
+  # the branding/logo generator (ui_polish.py) respectively. Installed
+  # explicitly rather than assumed as transitive dependencies.
+  env/bin/pip install --no-cache-dir Faker Pillow
 
 FROM base AS erpnext
 
@@ -127,6 +131,8 @@ COPY resources/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY resources/fix-permissions.sh /usr/local/bin/fix-permissions.sh
 COPY resources/start-mariadb.sh /usr/local/bin/start-mariadb.sh
 COPY resources/bootstrap.sh /usr/local/bin/bootstrap.sh
+COPY --chown=frappe:frappe resources/seed_school.py /home/frappe/seed_school.py
+COPY --chown=frappe:frappe resources/ui_polish.py /home/frappe/ui_polish.py
 RUN chmod 755 /usr/local/bin/fix-permissions.sh /usr/local/bin/start-mariadb.sh /usr/local/bin/bootstrap.sh \
   && mkdir -p /home/frappe/frappe-bench/config/pids /var/lib/mysql /var/run/mysqld \
   && chown -R frappe:frappe /home/frappe/frappe-bench/config

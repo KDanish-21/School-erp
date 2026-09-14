@@ -9,9 +9,14 @@ frappe_docker's own multi-container split.
 
 Built and verified end-to-end locally before being written up here: a fresh
 container creates the site from scratch (frappe → erpnext → education),
-serves real logins over HTTP, and — critically — **persists correctly across
-a restart** (confirmed: restarting does NOT re-initialize the database or
-recreate the site, it goes straight to `bench migrate` and starts serving).
+**automatically seeds the full Little Scholars Public School demo** (120
+students, 12 instructors, 4 weeks of attendance, mixed paid/overdue fees, a
+graded mid-term exam, role-scoped users for every persona, and the navy/
+marigold desk branding), serves real logins over HTTP, and — critically —
+**persists correctly across a restart** (confirmed: restarting does NOT
+re-initialize the database, recreate the site, or re-run the demo seed — it
+goes straight to `bench migrate` and starts serving, exactly matching the
+local dev bench).
 
 ## What you need in Railway — just this one service
 
@@ -47,20 +52,28 @@ locally in this same container.
 
 ## First boot
 
-Takes a few minutes the first time: initializes MariaDB's data directory,
-bootstraps a working root password (see "MariaDB root auth" below for why
-this needs a specific approach), then creates the site and installs
-`erpnext` + `education`. Every restart after that just runs `bench migrate`
-and starts serving — confirmed by testing an actual restart.
+Takes several minutes the first time — this is doing a lot of work in one
+shot: initializes MariaDB's data directory, bootstraps a working root
+password (see "MariaDB root auth" below for why this needs a specific
+approach), creates the site and installs `erpnext` + `education`, then
+**automatically runs the full demo seed** (`seed_school.py` +
+`ui_polish.py`, baked into the image at `/home/frappe/`) — same scripts,
+same data, as the local dev bench. A marker file
+(`sites/<SITE_NAME>/.demo_seeded`) prevents this from ever re-running once
+it succeeds, so every restart after that just runs `bench migrate` and
+starts serving — confirmed by testing an actual restart.
 
-**This gives you a fresh, empty Education install** — not the exact demo
-data from the local dev bench (120 students, fees, attendance, branding).
-That data lives in the database/files, not in this repo. To bring it over,
-either restore a real `bench backup --with-files` from the local bench, or
-re-run the two idempotent scripts (`seed_school.py`, `ui_polish.py`) against
-this site — they reproduce the same data from scratch. Ask for a scripted
-version of the Company/Chart-of-Accounts step (normally done via the
-interactive setup wizard) if you go this route.
+**No manual steps required.** The moment the deploy finishes and you log in
+as `Administrator` (the password you set via `ADMIN_PASSWORD`), you get the
+exact same 120-student school — same roles, same fee/attendance/exam data,
+same navy-and-marigold branding — as the local bench. Nothing to
+restore, nothing to re-run by hand.
+
+If you ever do need to re-seed from scratch (e.g. testing on a fresh
+volume), the two scripts are idempotent and safe to re-run manually:
+```bash
+cd sites && ../env/bin/python /home/frappe/seed_school.py && ../env/bin/python /home/frappe/ui_polish.py
+```
 
 ## Notable things fixed while building this (for future reference)
 
@@ -88,6 +101,29 @@ interactive setup wizard) if you go this route.
   existing content on first use — silently skipping this image's own
   first-boot bootstrap logic entirely. Fixed by wiping `/var/lib/mysql` at
   the end of the image build so the volume always starts genuinely empty.
+- **A site created headlessly via `bench new-site` skips several fixtures
+  that ERPNext's *interactive* setup wizard normally installs first** —
+  discovered one at a time, each blocking a later step of the demo seed:
+  - `Company` creation failed on `Could not find Warehouse Type: Transit`
+    — fixed by calling ERPNext's real
+    `erpnext.setup.setup_wizard.operations.install_fixtures.install()` +
+    `install_company()` instead of hand-rolling Company creation.
+  - Student creation failed on `Could not find Gender: Male` — fixed by
+    also calling Frappe's own
+    `frappe.desk.page.setup_wizard.install_fixtures.install()` first.
+  - Fee invoicing failed on `Could not find Default Price List: Standard
+    Selling` — fixed by also calling `install_defaults(args)` from the
+    same ERPNext fixtures module (creates the Standard Selling/Buying
+    Price Lists + Global Defaults).
+  - The branding script failed on `MandatoryError: language, time_zone`
+    when saving `System Settings` — fixed by setting sensible India
+    defaults (`en` / `Asia/Kolkata`) before save, since the wizard step
+    that normally sets these never ran.
+  
+  All four are exercised by calling the *exact same wizard code path* a
+  real interactive setup runs, rather than re-implementing a subset by
+  hand — confirmed via two full fresh-volume boots and a restart-
+  persistence check.
 
 ## Debugging on Railway
 
