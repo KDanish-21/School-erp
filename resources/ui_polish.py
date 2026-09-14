@@ -162,15 +162,41 @@ def setup_education_settings_branding(logo_url):
 
 # ---------------------------------------------------------------- 3. workspace polish
 
-def ensure_custom_html_block(name, html, style=""):
+def ensure_custom_html_block(name, html, style="", script=""):
     if frappe.db.exists("Custom HTML Block", name):
+        # Self-healing: a block created by an earlier version of this script
+        # (before `script` existed) won't have it set — fix that in place
+        # rather than skipping, same pattern as fix_setup_wizard_flags.py.
+        if script and frappe.db.get_value("Custom HTML Block", name, "script") != script:
+            frappe.db.set_value("Custom HTML Block", name, "script", script)
+            log(f"Custom HTML Block '{name}' script updated")
         return name
     frappe.get_doc({
         "doctype": "Custom HTML Block", "name": name,
-        "html": html, "style": style, "private": 0,
+        "html": html, "style": style, "script": script, "private": 0,
     }).insert(ignore_permissions=True)
     log(f"Custom HTML Block '{name}'")
     return name
+
+
+# Frappe caps desk content at a fixed 900px column (centered) above the `lg`
+# breakpoint — same var(--page-max-width) rule reused across Workspace/Form/
+# List/Tree views, so it reads as "empty gap on the right" everywhere on a
+# normal demo laptop screen. Frappe ships a real, supported escape hatch for
+# exactly this (the navbar's "Toggle Full Width" feature — a body.full-width
+# class + a localStorage flag, re-applied on every full page load by
+# desk.js) but it's an opt-in per-browser toggle with no server-side default.
+# Auto-flip it for every visitor via a Custom HTML Block's `script` field —
+# that field is fieldtype "Code" (frappe/desk/doctype/custom_html_block),
+# explicitly exempt from the HTML sanitizer that strips <script> tags from
+# ordinary rich-text fields like Navbar Settings.announcement_widget
+# (confirmed the hard way: sanitize_html() silently stripped a script tag
+# added there). This rides Frappe's own tested CSS path instead of a custom
+# override, and needs no core-file edits.
+FULL_WIDTH_SCRIPT = (
+    'document.body.classList.add("full-width");'
+    'localStorage.setItem("container_fullwidth","true");'
+)
 
 
 def _content_has_block(content, block_type, key, value):
@@ -192,6 +218,7 @@ def polish_education_workspace(logo_url):
             f'<div style="color:{MARIGOLD};font-size:13px;">Academic Year 2026-2027 &middot; Term 2</div>'
             f'</div></div>'
         ),
+        script=FULL_WIDTH_SCRIPT,
     )
     if banner_name not in {c.custom_block_name for c in ws.get("custom_blocks")}:
         ws.append("custom_blocks", {"custom_block_name": banner_name, "label": banner_name})
@@ -234,6 +261,7 @@ def polish_teacher_portal_workspace(logo_url):
             f'<div style="color:{MARIGOLD};font-size:13px;">{SCHOOL_NAME}</div>'
             f'</div></div>'
         ),
+        script=FULL_WIDTH_SCRIPT,
     )
     if banner_name not in {c.custom_block_name for c in ws.get("custom_blocks")}:
         ws.append("custom_blocks", {"custom_block_name": banner_name, "label": banner_name})
