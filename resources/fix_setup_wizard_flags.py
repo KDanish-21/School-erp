@@ -54,6 +54,14 @@ def run():
         frappe.db.set_single_value("System Settings", "setup_complete", frappe.is_setup_complete())
         changed = True
 
+    # `bench new-site` also leaves the scheduler off by default (the
+    # supervisord "scheduler" process is running, but every scheduled job
+    # early-exits until this is flipped) — the local interactive-wizard
+    # bench has it on, so match that here too.
+    if not frappe.db.get_single_value("System Settings", "enable_scheduler"):
+        frappe.db.set_single_value("System Settings", "enable_scheduler", 1)
+        changed = True
+
     if changed:
         frappe.clear_cache()
         frappe.db.commit()
