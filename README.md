@@ -75,6 +75,21 @@ volume), the two scripts are idempotent and safe to re-run manually:
 cd sites && ../env/bin/python /home/frappe/seed_school.py && ../env/bin/python /home/frappe/ui_polish.py
 ```
 
+## Public user guide — `/guide`
+
+A plain-language, role-by-role walkthrough (Principal/Admin, Registrar,
+Teacher, Accountant, Student) is published as a public Frappe Web Page at
+`https://<your-domain>/guide` — **no login required to view it**, so it can
+be shared as a link with school staff directly. It's created automatically
+on first boot by `resources/user_guide.py`, and re-checked (self-healing,
+version-tagged) on every subsequent boot, so a content update in this repo
+reaches an already-deployed site on its next redeploy without a manual
+re-seed.
+
+Deliberately excludes real passwords — it explains the login flow, not the
+credentials themselves, since a page requiring no login shouldn't carry
+secrets.
+
 ## Notable things fixed while building this (for future reference)
 
 - **No Dockerfile `VOLUME` instruction** — Railway's builder rejects it

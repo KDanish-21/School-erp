@@ -48,6 +48,12 @@ export SITE_NAME
 export SITES_PATH="$BENCH_DIR/sites"
 (cd "$SITES_PATH" && "$BENCH_DIR/env/bin/python" /home/frappe/fix_setup_wizard_flags.py)
 
+echo "==> Ensuring the public /guide page is up to date (idempotent, runs every boot)"
+# Version-checked against PAGE_VERSION inside the script, same reason as
+# fix_setup_wizard_flags.py above: a content update needs to reach an
+# already-seeded site on its next redeploy, not just a brand-new one.
+(cd "$SITES_PATH" && "$BENCH_DIR/env/bin/python" /home/frappe/user_guide.py)
+
 SEED_MARKER="sites/$SITE_NAME/.demo_seeded"
 if [ ! -f "$SEED_MARKER" ]; then
   echo "==> Seeding demo data + branding (first time only for this site)"
