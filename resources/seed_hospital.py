@@ -389,6 +389,17 @@ def setup_appointments_and_encounters(doctor_by_full_name, patients):
                         lt.db_set("status", "Approved")
                     lab_count += 1
 
+            # Commit per appointment (not once at the end of the whole
+            # function) — this loop can produce 1000+ row operations across
+            # Patient Appointment/Encounter/Vital Signs/Lab Test and their
+            # child tables, and a single giant transaction here is exactly
+            # what got fully rolled back by a mariadbd crash/OOM restart on
+            # a memory-constrained deploy, wiping all prior progress in this
+            # function at once. Committing per-record means a crash loses at
+            # most the one record in flight, and the idempotency checks above
+            # let a retry pick up right where it left off.
+            frappe.db.commit()
+
     # Next few days: Scheduled/Open, no consultation yet
     for day_offset in range(1, 6):
         appt_date = TODAY + timedelta(days=day_offset)
@@ -415,8 +426,8 @@ def setup_appointments_and_encounters(doctor_by_full_name, patients):
                 frappe.db.rollback()
                 continue
             appt_count += 1
+            frappe.db.commit()
 
-    frappe.db.commit()
     log(f"{appt_count} appointments, {enc_count} consultations, {lab_count} lab tests")
 
 
