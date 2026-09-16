@@ -134,7 +134,11 @@ COPY resources/bootstrap.sh /usr/local/bin/bootstrap.sh
 COPY --chown=frappe:frappe resources/seed_school.py /home/frappe/seed_school.py
 COPY --chown=frappe:frappe resources/ui_polish.py /home/frappe/ui_polish.py
 COPY --chown=frappe:frappe resources/fix_setup_wizard_flags.py /home/frappe/fix_setup_wizard_flags.py
-COPY --chown=frappe:frappe resources/user_guide.py /home/frappe/user_guide.py
+COPY --chown=frappe:frappe resources/guide.py /home/frappe/guide.py
+COPY --chown=frappe:frappe resources/school_guide.py /home/frappe/school_guide.py
+COPY --chown=frappe:frappe resources/health_guide.py /home/frappe/health_guide.py
+COPY --chown=frappe:frappe resources/seed_hospital.py /home/frappe/seed_hospital.py
+COPY --chown=frappe:frappe resources/polish_healthcare.py /home/frappe/polish_healthcare.py
 RUN chmod 755 /usr/local/bin/fix-permissions.sh /usr/local/bin/start-mariadb.sh /usr/local/bin/bootstrap.sh \
   && mkdir -p /home/frappe/frappe-bench/config/pids /var/lib/mysql /var/run/mysqld \
   && chown -R frappe:frappe /home/frappe/frappe-bench/config

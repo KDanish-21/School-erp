@@ -6,5 +6,9 @@
   {
     "url": "https://github.com/frappe/education",
     "branch": "develop"
+  },
+  {
+    "url": "https://github.com/earthians/marley",
+    "branch": "develop"
   }
 ]
