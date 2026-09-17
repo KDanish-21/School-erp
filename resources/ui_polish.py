@@ -1,6 +1,6 @@
 """
-Desk branding + workspace polish for "Little Scholars Public School".
-Run AFTER seed_school.py. Same idempotent-ORM-script pattern.
+Desk branding + workspace polish for "ADRS Academy" (ADRS Techno's school
+demo). Run AFTER seed_school.py. Same idempotent-ORM-script pattern.
 
 Run with:
     cd ~/frappe-bench/sites
@@ -12,6 +12,8 @@ import os
 import frappe
 from PIL import Image, ImageDraw, ImageFont
 
+import brand
+
 SITE_NAME = os.environ.get("SITE_NAME", "erp.localhost")
 SITES_PATH = os.environ.get("SITES_PATH", "/Users/danishkhan/frappe-bench/sites")
 
@@ -19,12 +21,13 @@ frappe.init(site=SITE_NAME, sites_path=SITES_PATH)
 frappe.connect()
 frappe.set_user("Administrator")
 
-SCHOOL_NAME = "Little Scholars Public School"
-NAVY = "#1B3B6F"
-NAVY_DARK = "#12294D"
-MARIGOLD = "#F2A93B"
-CHARCOAL = "#4A5568"
-PARCHMENT = "#FDF8F0"
+SCHOOL_NAME = brand.SCHOOL_NAME
+NAVY = brand.NAVY
+NAVY_DARK = brand.NAVY_DARK
+ACCENT = brand.ACCENT
+MUTED_ON_DARK = brand.MUTED_ON_DARK
+CHARCOAL = brand.CHARCOAL
+BG_LIGHT = brand.BG_LIGHT
 
 # macOS path first (local dev reruns), Debian/Railway container path second.
 _FONT_CANDIDATES_BOLD = [
@@ -47,32 +50,23 @@ def log(msg):
 # ---------------------------------------------------------------- 1. logo
 
 def generate_crest_png() -> bytes:
+    # Small-format use only (favicon, navbar/workspace icon) — the real ADRS
+    # wordmark + tagline isn't legible at 16x16, so this stays a simple
+    # single-letter monogram rather than trying to shrink the real logo.
     S = 2048
     img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
     pad = 40
-    # marigold ring (drawn first, slightly larger)
-    draw.ellipse([pad, pad, S - pad, S - pad], fill=MARIGOLD)
+    # thin slate ring (drawn first, slightly larger)
+    draw.ellipse([pad, pad, S - pad, S - pad], fill=ACCENT)
     # navy disc on top, leaving a thin ring visible
     ring = 36
     draw.ellipse([pad + ring, pad + ring, S - pad - ring, S - pad - ring], fill=NAVY)
 
-    # "LS" monogram
-    font = ImageFont.truetype(FONT_BOLD, 760)
-    draw.text((S / 2, S / 2 - 140), "LS", font=font, fill="white", anchor="mm")
-
-    # small book-glyph motif beneath the monogram
-    cx, cy = S / 2, S / 2 + 470
-    w, h = 340, 110
-    draw.polygon(
-        [(cx - w, cy - h * 0.3), (cx, cy + h * 0.5), (cx, cy - h * 0.6), (cx - w * 0.15, cy - h)],
-        fill=MARIGOLD,
-    )
-    draw.polygon(
-        [(cx + w, cy - h * 0.3), (cx, cy + h * 0.5), (cx, cy - h * 0.6), (cx + w * 0.15, cy - h)],
-        fill=MARIGOLD,
-    )
+    # "A" monogram
+    font = ImageFont.truetype(FONT_BOLD, 1100)
+    draw.text((S / 2, S / 2 - 40), "A", font=font, fill="white", anchor="mm")
 
     img = img.resize((512, 512), Image.LANCZOS)
     buf = io.BytesIO()
@@ -83,8 +77,8 @@ def generate_crest_png() -> bytes:
 def ensure_logo_file() -> str:
     from frappe.utils.file_manager import save_file
     png_bytes = generate_crest_png()
-    file_doc = save_file("lsps_logo.png", png_bytes, dt=None, dn=None, is_private=0, decode=False)
-    log(f"Logo file -> {file_doc.file_url}")
+    file_doc = save_file("adrs_crest.png", png_bytes, dt=None, dn=None, is_private=0, decode=False)
+    log(f"Crest file -> {file_doc.file_url}")
     return file_doc.file_url
 
 
@@ -97,11 +91,11 @@ def ensure_color(name, hex_value):
 
 
 def ensure_website_theme(logo_url):
-    name = "Little Scholars"
-    navy = ensure_color("LSPS Navy", NAVY)
-    navy_dark = ensure_color("LSPS Navy Dark", NAVY_DARK)
-    charcoal = ensure_color("LSPS Charcoal", CHARCOAL)
-    parchment = ensure_color("LSPS Parchment", PARCHMENT)
+    name = brand.BRAND_SHORT
+    navy = ensure_color("ADRS Navy", NAVY)
+    navy_dark = ensure_color("ADRS Navy Dark", NAVY_DARK)
+    charcoal = ensure_color("ADRS Charcoal", CHARCOAL)
+    bg_light = ensure_color("ADRS Light", BG_LIGHT)
 
     if frappe.db.exists("Website Theme", name):
         theme = frappe.get_doc("Website Theme", name)
@@ -111,16 +105,16 @@ def ensure_website_theme(logo_url):
     theme.primary_color = navy
     theme.text_color = charcoal
     theme.dark_color = navy_dark
-    theme.light_color = parchment
-    theme.background_color = parchment
+    theme.light_color = bg_light
+    theme.background_color = bg_light
     theme.save(ignore_permissions=True)
     log(f"Website Theme '{name}'")
     return name
 
 
-def setup_navbar_branding(logo_url):
+def setup_navbar_branding(crest_url):
     ns = frappe.get_single("Navbar Settings")
-    ns.app_logo = logo_url
+    ns.app_logo = crest_url
     ns.announcement_widget = (
         f"<p>Welcome to <b>{SCHOOL_NAME}</b> — Academic Year 2026-2027, Term 2 is now in session.</p>"
     )
@@ -130,7 +124,7 @@ def setup_navbar_branding(logo_url):
     log("Navbar Settings branded")
 
 
-def setup_system_and_website_settings(logo_url, theme_name):
+def setup_system_and_website_settings(logo_url, crest_url, theme_name):
     ss = frappe.get_single("System Settings")
     ss.app_name = SCHOOL_NAME
     # A site created headlessly via `bench new-site` skips the interactive
@@ -147,7 +141,7 @@ def setup_system_and_website_settings(logo_url, theme_name):
     ws = frappe.get_single("Website Settings")
     ws.app_name = SCHOOL_NAME
     ws.app_logo = logo_url
-    ws.favicon = logo_url
+    ws.favicon = crest_url
     ws.website_theme = theme_name
     ws.save(ignore_permissions=True)
     log("System/Website Settings branded")
@@ -208,14 +202,14 @@ def polish_education_workspace(logo_url):
     content = frappe.parse_json(ws.content) if ws.content else []
 
     banner_name = ensure_custom_html_block(
-        "LSPS Welcome Banner",
+        "ADRS Welcome Banner",
         html=(
             f'<div style="display:flex;align-items:center;gap:16px;background:{NAVY};'
             f'border-radius:10px;padding:18px 24px;margin-bottom:8px;">'
             f'<img src="{logo_url}" style="width:52px;height:52px;border-radius:50%;" />'
             f'<div>'
             f'<div style="color:white;font-size:20px;font-weight:700;">{SCHOOL_NAME}</div>'
-            f'<div style="color:{MARIGOLD};font-size:13px;">Academic Year 2026-2027 &middot; Term 2</div>'
+            f'<div style="color:{MUTED_ON_DARK};font-size:13px;">Academic Year 2026-2027 &middot; Term 2</div>'
             f'</div></div>'
         ),
         script=FULL_WIDTH_SCRIPT,
@@ -251,14 +245,14 @@ def polish_teacher_portal_workspace(logo_url):
     content = frappe.parse_json(ws.content) if ws.content else []
 
     banner_name = ensure_custom_html_block(
-        "LSPS Teacher Welcome Banner",
+        "ADRS Teacher Welcome Banner",
         html=(
             f'<div style="display:flex;align-items:center;gap:16px;background:{NAVY};'
             f'border-radius:10px;padding:18px 24px;margin-bottom:8px;">'
             f'<img src="{logo_url}" style="width:44px;height:44px;border-radius:50%;" />'
             f'<div>'
             f'<div style="color:white;font-size:18px;font-weight:700;">Welcome, Educator</div>'
-            f'<div style="color:{MARIGOLD};font-size:13px;">{SCHOOL_NAME}</div>'
+            f'<div style="color:{MUTED_ON_DARK};font-size:13px;">{SCHOOL_NAME}</div>'
             f'</div></div>'
         ),
         script=FULL_WIDTH_SCRIPT,
@@ -287,15 +281,16 @@ def polish_teacher_portal_workspace(logo_url):
 # ---------------------------------------------------------------- run all
 
 def run_all():
-    logo_url = ensure_logo_file()
-    setup_navbar_branding(logo_url)
+    crest_url = ensure_logo_file()
+    logo_url = brand.ensure_static_logo_file(brand.LOGO_LIGHT_FILENAME)
+    setup_navbar_branding(crest_url)
     theme_name = ensure_website_theme(logo_url)
-    setup_system_and_website_settings(logo_url, theme_name)
+    setup_system_and_website_settings(logo_url, crest_url, theme_name)
     setup_education_settings_branding(logo_url)
     frappe.db.commit()
 
-    polish_education_workspace(logo_url)
-    polish_teacher_portal_workspace(logo_url)
+    polish_education_workspace(crest_url)
+    polish_teacher_portal_workspace(crest_url)
     frappe.db.commit()
 
     frappe.clear_cache()

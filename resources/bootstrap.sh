@@ -88,6 +88,13 @@ echo "==> Ensuring the public guide pages are up to date (idempotent, runs every
 (cd "$SITES_PATH" && "$BENCH_DIR/env/bin/python" /home/frappe/school_guide.py)
 (cd "$SITES_PATH" && "$BENCH_DIR/env/bin/python" /home/frappe/health_guide.py)
 
+echo "==> Ensuring ADRS Techno branding (idempotent, runs every boot)"
+# One-time migration for a site seeded before the ADRS rebrand (Company
+# "Danish", old email domains) — a genuine no-op on a site that's already
+# on the new identity or was created fresh under it, since it only ever
+# does real work when it finds the old names.
+(cd "$SITES_PATH" && "$BENCH_DIR/env/bin/python" /home/frappe/rebrand_to_adrs.py)
+
 SEED_MARKER="sites/$SITE_NAME/.demo_seeded"
 if [ ! -f "$SEED_MARKER" ]; then
   echo "==> Seeding demo data + branding (first time only for this site)"

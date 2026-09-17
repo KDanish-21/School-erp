@@ -28,6 +28,8 @@ import os
 
 import frappe
 
+import brand
+
 SITE_NAME = os.environ.get("SITE_NAME", "erp.localhost")
 SITES_PATH = os.environ.get("SITES_PATH", "/Users/danishkhan/frappe-bench/sites")
 
@@ -149,10 +151,23 @@ def setup_workspace_shortcuts():
     log("Healthcare workspace shortcuts relabeled")
 
 
+def setup_workspace_title():
+    # Renames the Workspace record's own title only — the app-switcher tile
+    # itself still reads "Marley Health" (that's the vendored healthcare
+    # app's own hooks.py, not something a demo-authored script should patch).
+    if not frappe.db.exists("Workspace", "Healthcare"):
+        log("Healthcare workspace not found — skipping title rename")
+        return
+    if frappe.db.get_value("Workspace", "Healthcare", "title") != brand.HOSPITAL_NAME:
+        frappe.db.set_value("Workspace", "Healthcare", "title", brand.HOSPITAL_NAME)
+        log(f"Healthcare workspace title -> {brand.HOSPITAL_NAME}")
+
+
 def run_all():
     setup_term_translations()
     setup_field_labels()
     setup_workspace_shortcuts()
+    setup_workspace_title()
     frappe.db.commit()
     frappe.clear_cache()
     log("Done.")

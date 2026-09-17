@@ -16,6 +16,8 @@ import os
 
 import frappe
 
+import brand
+
 SITE_NAME = os.environ.get("SITE_NAME", "erp.localhost")
 SITES_PATH = os.environ.get("SITES_PATH", "/Users/danishkhan/frappe-bench/sites")
 
@@ -23,9 +25,9 @@ frappe.init(site=SITE_NAME, sites_path=SITES_PATH)
 frappe.connect()
 frappe.set_user("Administrator")
 
-SCHOOL_NAME = "Little Scholars Public School"
+SCHOOL_NAME = brand.SCHOOL_NAME
 ROUTE = "school-guide"
-PAGE_VERSION = "1"
+PAGE_VERSION = "2"
 
 
 def log(msg):
@@ -38,7 +40,7 @@ HTML_CONTENT = f"""
   <a class="g-back" href="/guide">&larr; All guides</a>
 
   <header class="g-hero">
-    <div class="g-crest">LS</div>
+    <div class="g-crest">A</div>
     <p class="g-eyebrow">{SCHOOL_NAME}</p>
     <h1>The School Guide</h1>
     <p class="g-dek">Everything about running the school on this system — how it's organized, what each role does, and every common task explained step by step.</p>
@@ -227,12 +229,12 @@ HTML_CONTENT = f"""
 
 CSS_CONTENT = """
 .guide{
-  --navy: #1B3B6F;
-  --navy-dark: #12294D;
-  --marigold: #F2A93B;
-  --charcoal: #4A5568;
-  --parchment: #FDF8F0;
-  --border: #E7DFC9;
+  --navy: #172554;
+  --navy-dark: #0B1120;
+  --accent: #4D5565;
+  --charcoal: #222326;
+  --bg-light: #F4F5F8;
+  --border: #DDE1EA;
   max-width: 760px;
   margin: 0 auto;
   padding: 8px 4px 40px;
@@ -252,9 +254,9 @@ CSS_CONTENT = """
   background: var(--navy); color: #fff;
   display: flex; align-items: center; justify-content: center;
   font-family: Georgia, serif; font-weight: 700; font-size: 20px;
-  margin: 0 auto 14px; border: 3px solid var(--marigold);
+  margin: 0 auto 14px; border: 3px solid var(--accent);
 }
-.g-eyebrow{ text-transform: uppercase; letter-spacing: .08em; font-size: 12px; color: var(--marigold); font-weight: 700; margin: 0 0 6px; }
+.g-eyebrow{ text-transform: uppercase; letter-spacing: .08em; font-size: 12px; color: var(--accent); font-weight: 700; margin: 0 0 6px; }
 .g-hero h1{ font-size: 30px; margin: 0 0 10px; }
 .g-dek{ color: var(--charcoal); max-width: 50ch; margin: 0 auto; font-size: 15.5px; }
 
@@ -265,7 +267,7 @@ CSS_CONTENT = """
 .g-jump-label{ font-size: 13px; color: var(--charcoal); margin-right: 4px; }
 .g-jump a{
   font-size: 13.5px; text-decoration: none; color: var(--navy);
-  border: 1px solid var(--border); background: var(--parchment);
+  border: 1px solid var(--border); background: var(--bg-light);
   padding: 6px 13px; border-radius: 999px;
 }
 .g-jump a:hover{ background: var(--navy); color: #fff; border-color: var(--navy); }
@@ -276,7 +278,7 @@ CSS_CONTENT = """
 }
 .g-tag{
   font-family: -apple-system, sans-serif; text-transform: uppercase; letter-spacing: .06em;
-  font-size: 10.5px; font-weight: 700; color: #fff; background: var(--marigold);
+  font-size: 10.5px; font-weight: 700; color: #fff; background: var(--accent);
   padding: 3px 9px; border-radius: 5px; white-space: nowrap;
 }
 .g-role{ border-top: 3px solid var(--navy); padding-top: 18px; }
@@ -289,13 +291,13 @@ CSS_CONTENT = """
 .g-substeps li{ margin-bottom: 6px; font-size: 14.5px; }
 
 .g-note{
-  background: var(--parchment); border-left: 3px solid var(--marigold);
+  background: var(--bg-light); border-left: 3px solid var(--accent);
   border-radius: 0 8px 8px 0; padding: 10px 16px; margin: 12px 0 16px;
   font-size: 14.5px;
 }
 .g-note p{ margin: 0; }
 .guide code{
-  background: var(--parchment); border: 1px solid var(--border);
+  background: var(--bg-light); border: 1px solid var(--border);
   padding: 1px 6px; border-radius: 4px; font-size: .92em;
 }
 
@@ -304,7 +306,7 @@ CSS_CONTENT = """
   margin: 16px 0 18px;
 }
 .g-gterm{
-  background: var(--parchment); border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-light); border: 1px solid var(--border); border-radius: 8px;
   padding: 12px 14px; font-size: 13.5px;
 }
 .g-gterm strong{ display: block; color: var(--navy-dark); margin-bottom: 4px; font-size: 14px; }

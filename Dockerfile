@@ -1,5 +1,5 @@
-# Little Scholars Public School — fully self-contained single-container image
-# for Railway: Frappe + ERPNext + Education + MariaDB + Redis all in one.
+# ADRS Techno — fully self-contained single-container image for Railway:
+# Frappe + ERPNext + Education + Healthcare + MariaDB + Redis all in one.
 #
 # Adapted from the official frappe_docker "custom" image
 # (https://github.com/frappe/frappe_docker, MIT licensed). Deliberate
@@ -131,6 +131,9 @@ COPY resources/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY resources/fix-permissions.sh /usr/local/bin/fix-permissions.sh
 COPY resources/start-mariadb.sh /usr/local/bin/start-mariadb.sh
 COPY resources/bootstrap.sh /usr/local/bin/bootstrap.sh
+COPY --chown=frappe:frappe resources/brand.py /home/frappe/brand.py
+COPY --chown=frappe:frappe resources/adrs_logo.png /home/frappe/adrs_logo.png
+COPY --chown=frappe:frappe resources/adrs_logo_dark.png /home/frappe/adrs_logo_dark.png
 COPY --chown=frappe:frappe resources/seed_school.py /home/frappe/seed_school.py
 COPY --chown=frappe:frappe resources/ui_polish.py /home/frappe/ui_polish.py
 COPY --chown=frappe:frappe resources/fix_setup_wizard_flags.py /home/frappe/fix_setup_wizard_flags.py
@@ -139,6 +142,7 @@ COPY --chown=frappe:frappe resources/school_guide.py /home/frappe/school_guide.p
 COPY --chown=frappe:frappe resources/health_guide.py /home/frappe/health_guide.py
 COPY --chown=frappe:frappe resources/seed_hospital.py /home/frappe/seed_hospital.py
 COPY --chown=frappe:frappe resources/polish_healthcare.py /home/frappe/polish_healthcare.py
+COPY --chown=frappe:frappe resources/rebrand_to_adrs.py /home/frappe/rebrand_to_adrs.py
 RUN chmod 755 /usr/local/bin/fix-permissions.sh /usr/local/bin/start-mariadb.sh /usr/local/bin/bootstrap.sh \
   && mkdir -p /home/frappe/frappe-bench/config/pids /var/lib/mysql /var/run/mysqld \
   && chown -R frappe:frappe /home/frappe/frappe-bench/config

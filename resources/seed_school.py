@@ -18,6 +18,8 @@ from faker import Faker
 
 import os
 
+import brand
+
 SITE_NAME = os.environ.get("SITE_NAME", "erp.localhost")
 SITES_PATH = os.environ.get("SITES_PATH", "/Users/danishkhan/frappe-bench/sites")
 
@@ -31,9 +33,10 @@ fake = Faker("en_IN")
 
 # ---------------------------------------------------------------- constants
 
-COMPANY = "Danish"
-SCHOOL_ABBR = "LSPS"
-SCHOOL_DOMAIN = "littlescholars.edu.in"
+COMPANY = brand.COMPANY_NAME
+COMPANY_ABBR = brand.COMPANY_ABBR
+SCHOOL_ABBR = brand.SCHOOL_ABBR
+SCHOOL_DOMAIN = brand.SCHOOL_DOMAIN
 DEMO_PASSWORD = "Demo@1234"
 
 ACADEMIC_YEAR = "2026-2027"
@@ -120,7 +123,7 @@ def setup_company_and_fiscal_year():
 
     args = frappe._dict({
         "company_name": COMPANY,
-        "company_abbr": "D",
+        "company_abbr": COMPANY_ABBR,
         "currency": "INR",
         "country": "India",
         "chart_of_accounts": "India - Chart of Accounts",

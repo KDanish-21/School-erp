@@ -32,6 +32,8 @@ from datetime import date, timedelta
 import frappe
 from faker import Faker
 
+import brand
+
 SITE_NAME = os.environ.get("SITE_NAME", "erp.localhost")
 SITES_PATH = os.environ.get("SITES_PATH", "/Users/danishkhan/frappe-bench/sites")
 
@@ -39,9 +41,9 @@ frappe.init(site=SITE_NAME, sites_path=SITES_PATH)
 frappe.connect()
 frappe.set_user("Administrator")
 
-COMPANY = "Danish"  # reuse the exact same Company as the school — one setup
+COMPANY = brand.COMPANY_NAME  # reuse the exact same Company as the school — one setup
 DEMO_PASSWORD = "Demo@1234"
-HOSPITAL_DOMAIN = "citycarehospital.in"
+HOSPITAL_DOMAIN = brand.HOSPITAL_DOMAIN
 TODAY = date(2026, 9, 16)
 
 fake = Faker("en_IN")
