@@ -195,8 +195,25 @@ def setup_grading_scale():
         return name
     gs = frappe.new_doc("Grading Scale")
     gs.grading_scale_name = name
-    for grade, threshold in (("A", 80), ("B", 70), ("C", 60), ("D", 50), ("F", 0)):
-        gs.append("intervals", {"grade_code": grade, "threshold": threshold})
+    # Grading Scale Interval requires explicit minimum_percentage AND
+    # maximum_percentage on every row (validate_intervals() throws
+    # otherwise) — confirmed the hard way against the education app's
+    # `develop` branch, which added this validation (plus overlap/duplicate-
+    # boundary checks) after this script was first written against an older
+    # state of that branch. Boundaries end in .99 rather than touching
+    # exactly (e.g. 79.99/80, not 80/80) because the same validation also
+    # rejects any percentage value that appears as a boundary more than
+    # once across the whole scale.
+    for grade, min_pct, max_pct in (
+        ("A", 80, 100),
+        ("B", 70, 79.99),
+        ("C", 60, 69.99),
+        ("D", 50, 59.99),
+        ("F", 0, 49.99),
+    ):
+        gs.append("intervals", {
+            "grade_code": grade, "minimum_percentage": min_pct, "maximum_percentage": max_pct,
+        })
     gs.insert(ignore_permissions=True)
     gs.submit()
     log(f"Grading Scale {name}")
@@ -220,9 +237,22 @@ def setup_rooms():
 
 
 def setup_batches():
+    # course/start_date/end_date/company became mandatory on this doctype
+    # after this script was first written (confirmed against the education
+    # app's `develop` branch) — Student Batch Name used to be a plain
+    # reusable label shared across every grade/course, which is still
+    # exactly how it's used here (Program Enrollment.student_batch_name is
+    # just a "which section" tag, never cross-checked against the course
+    # picked below), so any valid Course satisfies the new schema without
+    # changing that. Must run after setup_courses().
+    placeholder_course = COURSES[0]
     for section in SECTIONS:
         if not frappe.db.exists("Student Batch Name", section):
-            frappe.get_doc({"doctype": "Student Batch Name", "batch_name": section}).insert(ignore_permissions=True)
+            frappe.get_doc({
+                "doctype": "Student Batch Name", "batch_name": section,
+                "course": placeholder_course, "company": COMPANY,
+                "start_date": YEAR_START, "end_date": YEAR_END,
+            }).insert(ignore_permissions=True)
     log("Student Batch Names")
 
 
@@ -864,9 +894,9 @@ def run_all():
     setup_holiday_list()
     grading_scale = setup_grading_scale()
     rooms = setup_rooms()
-    setup_batches()
     setup_programs()
     setup_courses()
+    setup_batches()
     instructor_names = setup_instructors()
     roster = setup_groups_and_students(instructor_names)
     frappe.db.commit()

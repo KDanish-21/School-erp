@@ -5,9 +5,11 @@ littlescholars.edu.in / citycarehospital.in) to the new one. A brand-new
 site never needs this: seed_school.py/seed_hospital.py already create
 everything under the new identity from birth.
 
-Every step below is a no-op once already done, so this is safe to run on
-every boot (same "idempotent, runs every boot" pattern as guide.py and
-fix_setup_wizard_flags.py) rather than needing its own marker file.
+The rename steps are each a no-op once already done (checked against live
+DB state, not a marker), so this is safe to run on every boot like guide.py
+and fix_setup_wizard_flags.py. The branding-script rerun is the one part
+gated behind an actual marker file (.adrs_branding_applied) rather than "did
+a rename just happen" — see the comment on that check in run_all() for why.
 
 Confirmed against the installed Frappe/ERPNext source before writing this
 (not assumed): both Company and User have `allow_rename: 1`. Company's own
@@ -89,24 +91,34 @@ def rerun_branding_scripts():
         subprocess.run([sys.executable, os.path.join(here, script)], check=True, cwd=SITES_PATH)
 
 
+BRANDING_MARKER = os.path.join(SITES_PATH, SITE_NAME, ".adrs_branding_applied")
+
+
 def run_all():
     company_changed = rename_company()
     frappe.db.commit()
     users_changed = rename_users()
     frappe.db.commit()
 
-    if company_changed or users_changed:
-        # Only meaningful right after an actual migration — re-run the
-        # branding scripts so every other field (logo, colors, workspace
-        # titles, terminology) self-heals to the new identity too. Gated on
-        # a real change rather than run unconditionally every boot: both
-        # scripts are safe to re-run, but there's no reason to pay their
-        # cost (PIL image regen, several DB writes) on every single boot,
-        # forever, for every site — including brand-new ones that never had
-        # the old branding in the first place.
+    if not company_changed and not users_changed:
+        log("Nothing to rename")
+
+    # A persistent marker, not just "did a rename just happen": gating on
+    # the rename outcome alone has a real failure mode, hit while testing
+    # this exact script — if rerun_branding_scripts() itself fails partway
+    # (e.g. a workspace save choking on stale data from an unrelated
+    # upstream app upgrade), the rename step already committed, so a retry
+    # sees nothing left to rename and would silently skip branding forever,
+    # leaving the site's Company/emails migrated but its logo/colors/
+    # workspace titles stuck on the old identity indefinitely. The marker
+    # is only written after rerun_branding_scripts() succeeds, so a retry
+    # after a partial failure tries branding again regardless of whether
+    # any renaming is left to do.
+    if not os.path.exists(BRANDING_MARKER):
         rerun_branding_scripts()
+        open(BRANDING_MARKER, "w").close()
     else:
-        log("Nothing to migrate")
+        log("Branding already applied")
 
     frappe.clear_cache()
     log("Done.")

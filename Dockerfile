@@ -107,7 +107,25 @@ RUN bench init \
   # Faker + Pillow: used by the demo-data seed script (seed_school.py) and
   # the branding/logo generator (ui_polish.py) respectively. Installed
   # explicitly rather than assumed as transitive dependencies.
-  env/bin/pip install --no-cache-dir Faker Pillow
+  env/bin/pip install --no-cache-dir Faker Pillow && \
+  # Patch a genuine functional bug in the vendored `education` app itself
+  # (not one of our own demo scripts) — its own add_to_apps_screen gate
+  # (education/api/permissions.py: has_app_permission) hides the entire
+  # Education app/icon from anyone who isn't Administrator or doesn't have
+  # the "Education Manager" role. That's every school role except Principal
+  # Admin: Teacher (Instructor) can't reach Teacher Portal, Registrar
+  # (Academics User) can't reach Student Management/Admissions — confirmed
+  # live via a real teacher/registrar login reporting "school ka nahi aa
+  # raha" (the school side doesn't show up). This is application code, not
+  # site data, so patching it here (rather than a per-site migration script)
+  # fixes both brand-new sites and the already-live site automatically on
+  # its next redeploy. Deliberately still excludes "Accounts User" (Fee
+  # Clerk/Accountant) — the school guide's own documented flow has that role
+  # work entirely from the ERPNext app icon, never Education, so leaving
+  # them out matches the intended scoping rather than being a second bug.
+  sed -i 's/education_roles = \["Education Manager"\]/education_roles = ["Education Manager", "Instructor", "Academics User"]/' \
+    apps/education/education/api/permissions.py && \
+  grep -q '"Instructor"' apps/education/education/api/permissions.py
 
 FROM base AS erpnext
 

@@ -147,6 +147,10 @@ def setup_workspace_shortcuts():
         ws.content = frappe.as_json(content)
 
     if changed:
+        # Same reasoning as ui_polish.py's Workspace saves: pre-existing
+        # stale shortcut links from before an upstream app update shouldn't
+        # block a save this function's own change has nothing to do with.
+        ws.flags.ignore_links = True
         ws.save(ignore_permissions=True)
     log("Healthcare workspace shortcuts relabeled")
 

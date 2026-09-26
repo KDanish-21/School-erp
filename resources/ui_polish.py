@@ -236,6 +236,12 @@ def polish_education_workspace(logo_url):
             row.color = color_map[row.label]
 
     ws.content = frappe.as_json(content)
+    # Stale shortcut rows from before an upstream `education` app update can
+    # point at Pages/Tools that no longer exist (confirmed the hard way on a
+    # site upgraded across a develop-branch jump) — that's pre-existing data
+    # drift unrelated to the banner/color change this function makes, so
+    # skip link validation for the whole save rather than failing on it.
+    ws.flags.ignore_links = True
     ws.save(ignore_permissions=True)
     log("Education workspace polished")
 
@@ -274,6 +280,7 @@ def polish_teacher_portal_workspace(logo_url):
                          "data": {"quick_list_name": "This Week's Timetable", "col": 12}})
 
     ws.content = frappe.as_json(content)
+    ws.flags.ignore_links = True
     ws.save(ignore_permissions=True)
     log("Teacher Portal workspace polished")
 
